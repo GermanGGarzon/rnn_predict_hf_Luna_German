@@ -4,13 +4,13 @@ import theano
 import theano.tensor as T
 from theano import config
 from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
-import pickle
+import cPickle as pickle
 from collections import OrderedDict
 from sklearn.metrics import roc_auc_score
 
 def unzip(zipped):
 	new_params = OrderedDict()
-	for key, value in zipped.items():
+	for key, value in zipped.iteritems():
 		new_params[key] = value.get_value()
 	return new_params
 
@@ -26,7 +26,7 @@ def init_params(options):
 	inputDimSize = options['inputDimSize'] 
 	hiddenDimSize = options['hiddenDimSize'] #hidden layer does not need an extra space
 
-	params['W_emb'] = np.array(pickle.load(open(options['embFile'], 'rb'), encoding='latin1')).astype(config.floatX)
+	params['W_emb'] = np.array(pickle.load(open(options['embFile'], 'rb'))).astype(config.floatX)
 
 	params['W_gru'] = get_random_weight(embDimSize, 3*hiddenDimSize)
 	params['U_gru'] = get_random_weight(hiddenDimSize, 3*hiddenDimSize)
@@ -39,7 +39,7 @@ def init_params(options):
 
 def init_tparams(params):
 	tparams = OrderedDict()
-	for key, value in params.items():
+	for key, value in params.iteritems():
 		if key == 'W_emb': continue#####################
 		tparams[key] = theano.shared(value, name=key)
 	return tparams
@@ -154,9 +154,9 @@ def load_data(seqFile, labelFile, timeFile=''):
 	return train_set, valid_set, test_set
 
 def adadelta(tparams, grads, x, mask, y, cost):
-	zipped_grads = [theano.shared(p.get_value() * numpy_floatX(0.), name='%s_grad' % k) for k, p in tparams.items()]
-	running_up2 = [theano.shared(p.get_value() * numpy_floatX(0.), name='%s_rup2' % k) for k, p in tparams.items()]
-	running_grads2 = [theano.shared(p.get_value() * numpy_floatX(0.), name='%s_rgrad2' % k) for k, p in tparams.items()]
+	zipped_grads = [theano.shared(p.get_value() * numpy_floatX(0.), name='%s_grad' % k) for k, p in tparams.iteritems()]
+	running_up2 = [theano.shared(p.get_value() * numpy_floatX(0.), name='%s_rup2' % k) for k, p in tparams.iteritems()]
+	running_grads2 = [theano.shared(p.get_value() * numpy_floatX(0.), name='%s_rgrad2' % k) for k, p in tparams.iteritems()]
 
 	zgup = [(zg, g) for zg, g in zip(zipped_grads, grads)]
 	rg2up = [(rg2, 0.95 * rg2 + 0.05 * (g ** 2)) for rg2, g in zip(running_grads2, grads)]
@@ -175,7 +175,7 @@ def calculate_auc(test_model, datasets):
 	batchSize = 10
 	n_batches = int(np.ceil(float(len(datasets[0])) / float(batchSize)))
 	scoreVec = []
-	for index in range(n_batches):
+	for index in xrange(n_batches):
 		x, mask = padMatrix(datasets[0][index*batchSize: (index+1)*batchSize])
 		scoreVec.extend(list(test_model(x, mask)))
 	labels = datasets[1]
@@ -203,29 +203,29 @@ def train_GRU_RNN(
 	inputDimSize= 100,
 	embDimSize=100,
 	hiddenDimSize=100,
-	max_epochs=5,
+	max_epochs=100,
 	L2_reg = 0.,
 	batchSize=100,
 	use_dropout=True
 ):
 	options = locals().copy()
 	
-	print ('Loading data ... '),
+	print 'Loading data ... ',
 	trainSet, validSet, testSet = load_data(dataFile, labelFile)
 	n_batches = int(np.ceil(float(len(trainSet[0])) / float(batchSize)))
-	print ('done!!')
+	print 'done!!'
 
-	print ('Building the model ... '),
+	print 'Building the model ... ',
 	params = init_params(options)
 	tparams = init_tparams(params)
 	Wemb = theano.shared(params['W_emb'], name='W_emb')
 	use_noise, x, mask, y, p_y_given_x, cost =  build_model(tparams, options, Wemb)
-	print ('done!!')
+	print 'done!!'
 	
-	print ('Constructing the optimizer ... '),
-	grads = T.grad(cost, wrt=list(tparams.values()))
+	print 'Constructing the optimizer ... ',
+	grads = T.grad(cost, wrt=tparams.values())
 	f_grad_shared, f_update = adadelta(tparams, grads, x, mask, y, cost)
-	print ('done!!')
+	print 'done!!'
 
 	test_model = theano.function(inputs=[x, mask], outputs=p_y_given_x, name='test_model')
 
@@ -233,8 +233,8 @@ def train_GRU_RNN(
 	bestTestAuc = 0.
 	iteration = 0
 	bestParams = OrderedDict()
-	print ('Optimization start !!')
-	for epoch in range(max_epochs):
+	print 'Optimization start !!'
+	for epoch in xrange(max_epochs):
 		for index in random.sample(range(n_batches), n_batches):
 			use_noise.set_value(1.)
 			x, mask = padMatrix(trainSet[0][index*batchSize:(index+1)*batchSize])
@@ -245,13 +245,13 @@ def train_GRU_RNN(
 
 		use_noise.set_value(0.)
 		validAuc = calculate_auc(test_model, validSet)
-		print ('epoch:%d, valid_auc:%f' % (epoch, validAuc))
+		print 'epoch:%d, valid_auc:%f' % (epoch, validAuc)
 		if (validAuc > bestValidAuc):
 			bestValidAuc = validAuc
-			#testAuc = calculate_auc(test_model, testSet)
-			#bestTestAuc = testAuc
+			testAuc = calculate_auc(test_model, testSet)
+			bestTestAuc = testAuc
 			bestParams = unzip(tparams)
-			#print ('Currenlty the best test_auc:%f' % testAuc)
+			print 'Currenlty the best test_auc:%f' % testAuc
 	
 	np.savez_compressed(outFile, **bestParams)
 
@@ -264,7 +264,7 @@ if __name__ == '__main__':
 	inputDimSize = 15954
 	embDimSize = 100
 	hiddenDimSize = 100
-	max_epochs = 5
+	max_epochs = 100
 	L2_reg = 0.001
 	batchSize = 100
 	use_dropout = True
@@ -272,7 +272,7 @@ if __name__ == '__main__':
 	inputDimSize = 100 #The number of unique medical codes
 	embDimSize = 100 #The size of the code embedding
 	hiddenDimSize = 100 #The size of the hidden layer of the GRU
-	max_epochs = 5 #Maximum epochs to train
+	max_epochs = 100 #Maximum epochs to train
 	L2_reg = 0.001 #L2 regularization for the logistic weight
 	batchSize = 10 #The size of the mini-batch
 	use_dropout = True #Whether to use a dropout between the GRU and the logistic layer
