@@ -7,6 +7,7 @@ from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
 import cPickle as pickle
 from collections import OrderedDict
 from sklearn.metrics import roc_auc_score
+theano.config.cxx = ""
 
 def unzip(zipped):
 	new_params = OrderedDict()
