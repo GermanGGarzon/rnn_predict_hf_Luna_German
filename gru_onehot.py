@@ -191,10 +191,14 @@ def padMatrix(seqs):
 	x = np.zeros((maxlen, n_samples)).astype('int32')
 	x_mask = np.zeros((maxlen, n_samples)).astype(config.floatX)
 	for idx, s in enumerate(seqs):
-		x[:lengths[idx], idx] = s
+		x[:lengths[idx], idx] = np.array([ord(c) for c in unicode(s)], dtype='int32')
+
 		x_mask[:lengths[idx], idx] = 1.
 
 	return x, x_mask
+
+
+
 
 def train_GRU_RNN(
 	dataFile='data.txt',
@@ -238,7 +242,7 @@ def train_GRU_RNN(
 			use_noise.set_value(1.)
 			x, mask = padMatrix(trainSet[0][index*batchSize:(index+1)*batchSize])
 			y = trainSet[1][index*batchSize:(index+1)*batchSize]
-			cost = f_grad_shared(x, mask, y)
+			cost = f_grad_shared(x, mask, np.array(y).astype('int32'))
 			f_update()
 			iteration += 1
 
