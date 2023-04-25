@@ -1,2 +1,2 @@
-Validation accuracy: 0.53
-Test accuracy: 0.49
+Validation AUC-ROC: 0.5
+Test AUC-ROC: 0.5

@@ -255,8 +255,13 @@ def train_RNN_SVM(
     valid_predictions = svm.predict(valid_features)
     test_predictions = svm.predict(test_features)
 
-    valid_auc = roc_auc_score(validSet[1], valid_predictions)
-    test_auc = roc_auc_score(testSet[1], test_predictions)
+    validSet_numerical = np.array(validSet[1]).astype(int)
+    valid_predictions_numerical = np.array(valid_predictions).astype(int)
+    valid_auc = roc_auc_score(validSet_numerical, valid_predictions_numerical)
+    
+    testSet_numerical = np.array(testSet[1]).astype(int)
+    test_predictions_numerical = np.array(test_predictions).astype(int)
+    test_auc = roc_auc_score(testSet_numerical, test_predictions_numerical)
 
     print('Validation AUC-ROC:', valid_auc)
     print('Test AUC-ROC:', test_auc)

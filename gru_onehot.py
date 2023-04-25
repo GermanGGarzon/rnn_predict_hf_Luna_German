@@ -198,8 +198,6 @@ def padMatrix(seqs):
 	return x, x_mask
 
 
-
-
 def train_GRU_RNN(
 	dataFile='data.txt',
 	labelFile='label.txt',
