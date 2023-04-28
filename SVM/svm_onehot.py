@@ -33,35 +33,6 @@ def numpy_floatX(data):
 def get_random_weight(dim1, dim2, left=-0.1, right=0.1):
     return np.random.uniform(left, right, (dim1, dim2)).astype(config.floatX)
 
-def init_params(options):
-    params = OrderedDict()
-
-    inputDimSize = options['inputDimSize']
-    hiddenDimSize = options['hiddenDimSize']
-
-    params['W_emb'] = np.random.uniform(-0.01, 0.01, (inputDimSize, hiddenDimSize)).astype(config.floatX)
-
-    # Use Glorot initialization for W_rnn and U_rnn
-    bound = np.sqrt(6. / (options['inputDimSize'] + options['hiddenDimSize']))
-    params['W_rnn'] = np.random.uniform(-bound, bound, (options['inputDimSize'], options['hiddenDimSize']))
-    bound = np.sqrt(6. / (options['hiddenDimSize'] + options['hiddenDimSize']))
-    params['U_rnn'] = np.random.uniform(-bound, bound, (options['hiddenDimSize'], options['hiddenDimSize']))
-
-    params['b_rnn'] = np.zeros(options['hiddenDimSize'])
-
-    params['W_logistic'] = np.random.uniform(-0.01, 0.01, (hiddenDimSize, 1))
-    params['b_logistic'] = np.zeros((1,), dtype=config.floatX)
-
-    return params
-
-
-
-def init_tparams(params):
-    tparams = OrderedDict()
-    for key, value in params.items():
-        if key == 'W_emb': continue#####################
-        tparams[key] = theano.shared(value, name=key)
-    return tparams
 
 def dropout_layer(state_before, use_noise, trng):
     proj = T.switch(use_noise, (state_before * trng.binomial(state_before.shape, p=0.5, n=1, dtype=state_before.dtype)), state_before * 0.5)
@@ -188,20 +159,6 @@ class RNNModel(nn.Module):
         x = self.fc(x[:, -1, :])
         return x
 
-def rnn_layer(tparams, emb, options, mask=None):
-    hiddenDimSize = options['hiddenDimSize']
-    timesteps = emb.shape[0]
-    if emb.ndim == 3: n_samples = emb.shape[1]
-    else: n_samples = 1
-
-    def stepFn(stepMask, e, h):
-        h_new = T.tanh(T.dot(e, tparams['W_rnn']) + T.dot(h, tparams['U_rnn']) + tparams['b_rnn'])
-        h_new = stepMask[:, None] * h_new + (1. - stepMask)[:, None] * h
-        return h_new
-
-    results, updates = theano.scan(fn=stepFn, sequences=[mask, emb], outputs_info=T.alloc(numpy_floatX(0.0), n_samples, hiddenDimSize), name='rnn_layer', n_steps=timesteps)
-
-    return results[-1] 
 
 def train_RNN_SVM(
     dataFile='data.txt',
