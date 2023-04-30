@@ -11,8 +11,6 @@ from sklearn.svm import SVC
 from sklearn.metrics import accuracy_score
 import time
 from sklearn.model_selection import train_test_split
-from sklearn.model_selection import StratifiedKFold
-from sklearn.neighbors import KNeighborsClassifier
 import ast
 
 import torch
@@ -174,6 +172,7 @@ def train_RNN(
 ):
     options = locals().copy()
     bestValidAuc = 0.
+    bestTestAuc = 0.
     
     print('Loading Embedded File')
     with open(embFile, 'rb') as f:
@@ -187,12 +186,12 @@ def train_RNN(
     y_test_labels = np.array(testSet[1], dtype=np.int64)
     print('done!!')
     
-    # Convert sequences to integer indices
+
     train_indices = np.array([np.array(ast.literal_eval(seq), dtype=np.int64) for seq in trainSet[0]])
     valid_indices = np.array([np.array(ast.literal_eval(seq), dtype=np.int64) for seq in validSet[0]])
     test_indices = np.array([np.array(ast.literal_eval(seq), dtype=np.int64) for seq in testSet[0]])
 
-    # Get the embeddings for the training, validation, and test sets
+ 
     X_train = padMatrix([embeddings[seq] for seq in train_indices])
     X_valid = padMatrix([embeddings[seq] for seq in valid_indices])
     X_test = padMatrix([embeddings[seq] for seq in test_indices])
@@ -226,16 +225,24 @@ def train_RNN(
     for epoch in range(max_epochs):
         train_loss = train_epoch()
         valid_outputs = rnn_model(torch.tensor(X_valid, dtype=torch.float32)).squeeze()
+        
         valid_auc = roc_auc_score(y_valid_labels, valid_outputs.detach().numpy()) 
         if (valid_auc > bestValidAuc):
             bestValidAuc = valid_auc
             print('Best validation score: {:.4f}'.format(valid_auc))
         print('Epoch {:3d}, Loss: {:.4f}, Validation AUC-ROC: {:.4f}'.format(epoch + 1, train_loss, valid_auc))
 
-    test_scores = predict(rnn_model, X_test)
-    test_auc = roc_auc_score(y_test_labels, test_scores)
+        test_scores = predict(rnn_model, X_test)
+        test_auc = roc_auc_score(y_test_labels, test_scores)
+        if (test_auc > bestTestAuc):
+            bestTestAuc = test_auc
+            print('Best Test score: {:.4f}'.format(test_auc))
 
-    print('Test AUC-ROC: {:.4f}'.format(test_auc))
+        print('Test AUC-ROC: {:.4f}'.format(test_auc))
+        print('\n')
+        
+    print('Best Validation score: {:.4f}'.format(bestValidAuc))
+    print('Best Test score: {:.4f}'.format(bestTestAuc))
 
 if __name__ == '__main__':
     dataFile = sys.argv[1]
@@ -247,7 +254,7 @@ if __name__ == '__main__':
     hiddenDimSize = 1000 
     max_epochs = 100 #Maximum epochs to train
     lr = 0.01 
-    batchSize = 1000 #The size of the mini-batch
+    batchSize = 100 #The size of the mini-batch
     dropout_prob=0.7
     L2_reg = 1e-4
     

@@ -11,8 +11,6 @@ from sklearn.svm import SVC
 from sklearn.metrics import accuracy_score
 import time
 from sklearn.model_selection import train_test_split
-from sklearn.model_selection import StratifiedKFold
-from sklearn.neighbors import KNeighborsClassifier
 
 import torch
 import torch.nn as nn
@@ -161,7 +159,6 @@ def padMatrix(seqs):
 
 
 
-# Define the PyTorch RNN model
 class RNNModel(nn.Module):
     def __init__(self, input_dim, hidden_dim, dropout_prob=0.5):
         super(RNNModel, self).__init__()
@@ -190,6 +187,7 @@ def train_RNN(
 ):
     options = locals().copy()
     bestValidAuc = 0.
+    bestTestAuc = 0.
 
     print('Loading data ... ')
     trainSet, validSet, testSet = load_data(dataFile, labelFile)
@@ -241,9 +239,16 @@ def train_RNN(
             print('Best validation score: {:.4f}'.format(valid_auc))
         print('Epoch {:3d}, Loss: {:.4f}, Validation AUC-ROC: {:.4f}'.format(epoch + 1, train_loss, valid_auc))
 
-    test_auc = calculate_auc(testSet)
+        test_auc = calculate_auc(testSet)
+        if (test_auc > bestTestAuc):
+            bestTestAuc = test_auc
+            print('Best Test score: {:.4f}'.format(test_auc))
 
-    print('Test AUC-ROC: {:.4f}'.format(test_auc))
+        print('Test AUC-ROC: {:.4f}'.format(test_auc))
+        print('\n')
+
+    print('Best Validation score: {:.4f}'.format(bestValidAuc))
+    print('Best Test score: {:.4f}'.format(bestTestAuc))
 
 if __name__ == '__main__':
     dataFile = sys.argv[1]
@@ -254,7 +259,7 @@ if __name__ == '__main__':
     hiddenDimSize = 1000 
     max_epochs = 100 #Maximum epochs to train
     lr = 0.01 
-    batchSize = 100 #The size of the mini-batch
+    batchSize = 100 
     dropout_prob=0.7
     L2_reg = 1e-4
     
