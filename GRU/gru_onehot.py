@@ -133,24 +133,6 @@ def adadelta(tparams, grads, x, mask, y, cost):
 
     return f_grad_shared, f_update
 
-def calculate_auc(knn_model, rnn_model, dataset, use_rnn=True):
-    X_data_padded, _ = padMatrix(dataset[0])
-
-    if use_rnn:
-        X_data_tensor = torch.tensor(X_data_padded, dtype=torch.float32).permute(1, 0, 2)
-        with torch.no_grad():
-            data_features = rnn_model(X_data_tensor).numpy()
-    else:
-        data_features = np.reshape(X_data_padded, (X_data_padded.shape[1], -1))
-
-    y_pred_proba = knn_model.predict_proba(data_features)
-    y_pred = y_pred_proba[:, 1] # Get the probabilities of the positive class
-    auc_score = roc_auc_score(dataset[1], y_pred)
-
-    return auc_score
-
-
-
 
 max_sequence_length = 100
 
@@ -268,9 +250,9 @@ if __name__ == '__main__':
     labelFile = sys.argv[2]
     outFile = sys.argv[3]
 
-    inputDimSize = 100 #The number of unique medical codes
-    hiddenDimSize = 100 
-    max_epochs = 50 #Maximum epochs to train
+    inputDimSize = 1000 #The number of unique medical codes
+    hiddenDimSize = 1000 
+    max_epochs = 100 #Maximum epochs to train
     lr = 0.01 
     batchSize = 100 #The size of the mini-batch
     dropout_prob=0.7

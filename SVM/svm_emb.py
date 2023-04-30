@@ -46,34 +46,6 @@ def _slice(_x, n, dim):
         return _x[:, :, n*dim:(n+1)*dim]
     return _x[:, n*dim:(n+1)*dim]
 
-def build_model(tparams, options, Wemb):
-    trng = RandomStreams(123)
-    use_noise = theano.shared(numpy_floatX(0.))
-
-    x = T.matrix('x', dtype='int32')
-    mask = T.matrix('mask', dtype=config.floatX)
-    y = T.vector('y', dtype='int32')
-
-    n_timesteps = x.shape[0]
-    n_samples = x.shape[1]
-
-    emb = Wemb[x.flatten()].reshape([n_timesteps, n_samples, options['inputDimSize']])
-
-    # Apply a linear transformation to the embeddings
-    h = T.dot(emb, tparams['W']) + tparams['b']
-    
-    # Apply the sigmoid function to compute the output probabilities
-    p_y_given_x = T.nnet.sigmoid(h)
-
-    # Calculate the cost using binary cross-entropy
-    L = -(y * T.flatten(T.log(p_y_given_x)) + (1 - y) * T.flatten(T.log(1 - p_y_given_x)))
-    cost = T.mean(L)
-
-    if options['L2_reg'] > 0.:
-        cost += options['L2_reg'] * (tparams['W'] ** 2).sum()
-
-    return use_noise, x, mask, y, p_y_given_x, cost
-
 
 
 def load_data(dataFile, labelFile, test_size=0.2, valid_size=0.2):
@@ -93,42 +65,6 @@ def load_data(dataFile, labelFile, test_size=0.2, valid_size=0.2):
 
     return (X_train, y_train), (X_valid, y_valid), (X_test, y_test)
 
-def adadelta(tparams, grads, x, mask, y, cost):
-    zipped_grads = [theano.shared(p.get_value() * numpy_floatX(0.), name='%s_grad' % k) for k, p in tparams.iteritems()]
-    running_up2 = [theano.shared(p.get_value() * numpy_floatX(0.), name='%s_rup2' % k) for k, p in tparams.iteritems()]
-    running_grads2 = [theano.shared(p.get_value() * numpy_floatX(0.), name='%s_rgrad2' % k) for k, p in tparams.iteritems()]
-
-    zgup = [(zg, g) for zg, g in zip(zipped_grads, grads)]
-    rg2up = [(rg2, 0.95 * rg2 + 0.05 * (g ** 2)) for rg2, g in zip(running_grads2, grads)]
-
-    f_grad_shared = theano.function([x, mask, y], cost, updates=zgup + rg2up, name='adadelta_f_grad_shared')
-
-    updir = [-T.sqrt(ru2 + 1e-6) / T.sqrt(rg2 + 1e-6) * zg for zg, ru2, rg2 in zip(zipped_grads, running_up2, running_grads2)]
-    ru2up = [(ru2, 0.95 * ru2 + 0.05 * (ud ** 2)) for ru2, ud in zip(running_up2, updir)]
-    param_up = [(p, p + ud) for p, ud in zip(tparams.values(), updir)]
-
-    f_update = theano.function([], [], updates=ru2up + param_up, on_unused_input='ignore', name='adadelta_f_update')
-
-    return f_grad_shared, f_update
-
-def calculate_auc(knn_model, rnn_model, dataset, use_rnn=True):
-    X_data_padded, _ = padMatrix(dataset[0])
-
-    if use_rnn:
-        X_data_tensor = torch.tensor(X_data_padded, dtype=torch.float32).permute(1, 0, 2)
-        with torch.no_grad():
-            data_features = rnn_model(X_data_tensor).numpy()
-    else:
-        data_features = np.reshape(X_data_padded, (X_data_padded.shape[1], -1))
-
-    y_pred_proba = knn_model.predict_proba(data_features)
-    y_pred = y_pred_proba[:, 1] # Get the probabilities of the positive class
-    auc_score = roc_auc_score(dataset[1], y_pred)
-
-    return auc_score
-
-
-
 
 max_sequence_length = 100
 
@@ -147,9 +83,6 @@ def padMatrix(seqs):
     return x
 
 
-
-
-
 def train_SVM(
     dataFile='data.txt',
     labelFile='label.txt',
@@ -158,15 +91,15 @@ def train_SVM(
     inputDimSize=100,
     hiddenDimSize=100,
     max_epochs=100,
-    lr=0.001,
-    batchSize=100,
-    use_dropout=True
+    batchSize=100
 ):
     options = locals().copy()
 
     # Load the pickled embeddings
+    print('Loading Embedded File')
     with open(embFile, 'rb') as f:
         embeddings = pickle.load(f)
+    print("Embeddings shape:", np.array(embeddings).shape)
 
     # Load the data
     print('Loading data ... ')
@@ -191,7 +124,7 @@ def train_SVM(
     # Train SVM on the embeddings
     print('Training SVM...')
     svm = SVC(kernel='linear', gamma=1000, degree=5, coef0=-0.5, C=0.001, probability=True)
-    svm.fit(X_train, y_train_labels)  # Pass padded input sequences and corresponding labels
+    svm.fit(X_train, y_train_labels)  
     print('done!!')
 
     valid_auc = roc_auc_score(y_valid_labels, svm.predict_proba(X_valid)[:, 1])
@@ -204,21 +137,16 @@ def train_SVM(
         f.write('Test AUC-ROC: {:.4f}\n'.format(test_auc))
 
 
-
-
-
 if __name__ == '__main__':
     dataFile = sys.argv[1]
     labelFile = sys.argv[2]
     embFile = sys.argv[3]
     outFile = sys.argv[4]
 
-    inputDimSize = 100 #The number of unique medical codes
+    inputDimSize = 1000 
     hiddenDimSize = 100 
-    max_epochs = 100 #Maximum epochs to train
-    lr = 0.01 
-    batchSize = 100 #The size of the mini-batch
-    use_dropout = True 
+    max_epochs = 100 
+    batchSize = 1000 
     
 
-    train_SVM(dataFile=dataFile, labelFile=labelFile, embFile=embFile, outFile=outFile, inputDimSize=inputDimSize, hiddenDimSize=hiddenDimSize, max_epochs=max_epochs, lr=lr, batchSize=batchSize, use_dropout=use_dropout)
+    train_SVM(dataFile=dataFile, labelFile=labelFile, embFile=embFile, outFile=outFile, inputDimSize=inputDimSize, hiddenDimSize=hiddenDimSize, max_epochs=max_epochs, batchSize=batchSize)

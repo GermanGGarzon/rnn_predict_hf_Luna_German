@@ -269,12 +269,4 @@ if __name__ == '__main__':
 	batchSize = 100
 	use_dropout = True
 
-	inputDimSize = 100 #The number of unique medical codes
-	embDimSize = 100 #The size of the code embedding
-	hiddenDimSize = 100 #The size of the hidden layer of the GRU
-	max_epochs = 100 #Maximum epochs to train
-	L2_reg = 0.001 #L2 regularization for the logistic weight
-	batchSize = 10 #The size of the mini-batch
-	use_dropout = True #Whether to use a dropout between the GRU and the logistic layer
-
 	train_GRU_RNN(dataFile=dataFile, labelFile=labelFile, embFile=embFile, outFile=outFile, inputDimSize=inputDimSize, embDimSize=embDimSize, hiddenDimSize=hiddenDimSize, max_epochs=max_epochs, L2_reg=L2_reg, batchSize=batchSize, use_dropout=use_dropout)

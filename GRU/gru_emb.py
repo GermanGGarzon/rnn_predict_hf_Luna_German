@@ -12,6 +12,8 @@ from sklearn.metrics import accuracy_score
 import time
 from sklearn.model_selection import train_test_split
 from sklearn.model_selection import StratifiedKFold
+from sklearn.neighbors import KNeighborsClassifier
+import ast
 
 import torch
 import torch.nn as nn
@@ -114,40 +116,6 @@ def load_data(dataFile, labelFile, test_size=0.2, valid_size=0.2):
 
     return (X_train, y_train), (X_valid, y_valid), (X_test, y_test)
 
-def adadelta(tparams, grads, x, mask, y, cost):
-    zipped_grads = [theano.shared(p.get_value() * numpy_floatX(0.), name='%s_grad' % k) for k, p in tparams.iteritems()]
-    running_up2 = [theano.shared(p.get_value() * numpy_floatX(0.), name='%s_rup2' % k) for k, p in tparams.iteritems()]
-    running_grads2 = [theano.shared(p.get_value() * numpy_floatX(0.), name='%s_rgrad2' % k) for k, p in tparams.iteritems()]
-
-    zgup = [(zg, g) for zg, g in zip(zipped_grads, grads)]
-    rg2up = [(rg2, 0.95 * rg2 + 0.05 * (g ** 2)) for rg2, g in zip(running_grads2, grads)]
-
-    f_grad_shared = theano.function([x, mask, y], cost, updates=zgup + rg2up, name='adadelta_f_grad_shared')
-
-    updir = [-T.sqrt(ru2 + 1e-6) / T.sqrt(rg2 + 1e-6) * zg for zg, ru2, rg2 in zip(zipped_grads, running_up2, running_grads2)]
-    ru2up = [(ru2, 0.95 * ru2 + 0.05 * (ud ** 2)) for ru2, ud in zip(running_up2, updir)]
-    param_up = [(p, p + ud) for p, ud in zip(tparams.values(), updir)]
-
-    f_update = theano.function([], [], updates=ru2up + param_up, on_unused_input='ignore', name='adadelta_f_update')
-
-    return f_grad_shared, f_update
-
-def calculate_auc(rnn_model, dataset):
-    # Extract features using the RNN model
-    X_data_padded, _ = padMatrix(dataset[0])
-    X_data_tensor = torch.tensor(X_data_padded, dtype=torch.float32).permute(1, 0, 2)
-
-    with torch.no_grad():
-        data_features = rnn_model(X_data_tensor)
-
-    # Make predictions using the RNN model
-    y_pred = torch.sigmoid(data_features).numpy().squeeze()
-
-    # Calculate the AUC-ROC score
-    auc_score = roc_auc_score(dataset[1], y_pred)
-
-    return auc_score
-
 
 
 max_sequence_length = 100
@@ -157,149 +125,117 @@ def padMatrix(seqs):
     n_samples = len(seqs)
     max_len = np.min([np.max(lengths), max_sequence_length])
 
-    x = np.zeros((max_len, n_samples, inputDimSize), dtype='float32')
-    x_mask = np.zeros((max_len, n_samples), dtype='float32')
+    x = np.zeros((n_samples, max_len * inputDimSize), dtype='float32')
 
     for idx, s in enumerate(seqs):
         seq_length = lengths[idx]
-        one_hot_seq = np.zeros((max_len, inputDimSize), dtype='float32')
-        for i, c in enumerate(s[:max_len]):
-            one_hot_seq[i, ord(c)] = 1
-        x[:, idx, :] = one_hot_seq
-        x_mask[:min(seq_length, max_len), idx] = 1.
+        one_hot_seq = s[:max_len]
+        x[idx, :min(seq_length, max_len) * inputDimSize] = one_hot_seq.flatten()[:min(seq_length, max_len) * inputDimSize]
 
-    return x, x_mask
+    return x
 
-def load_embeddings(embedding_file):
-    with open(embedding_file, 'rb') as f:
-        embeddings = pickle.load(f)
-    
-    max_length = max([len(e.split()) for e in embeddings])
-    padded_embeddings = []
-    
-    for e in embeddings:
-        emb_array = np.fromstring(e, sep=' ', dtype=np.float32)
-        pad_length = max_length - len(emb_array)
-        padded_emb_array = np.pad(emb_array, (0, pad_length), 'constant', constant_values=0)
-        padded_embeddings.append(padded_emb_array)
-    
-    embeddings = np.stack(padded_embeddings)
-    return embeddings
-
+def predict(model, X):
+    model.eval()
+    with torch.no_grad():
+        inputs = torch.tensor(X, dtype=torch.float32)
+        outputs = model(inputs).squeeze()
+        scores = torch.sigmoid(outputs)  # Convert logits to probabilities
+    return scores.numpy()
 
 # Define the PyTorch RNN model
 class RNNModel(nn.Module):
-    def __init__(self, input_size, hidden_size, embeddings):
+    
+    def __init__(self, input_dim, hidden_dim, dropout_prob=0.5):
         super(RNNModel, self).__init__()
-        self.embedding = nn.Embedding.from_pretrained(torch.tensor(embeddings, dtype=torch.float32), freeze=True)
-        self.proj = nn.Linear(embeddings.shape[1], input_size)
-        self.rnn = nn.GRU(input_size, hidden_size, batch_first=True)
-        self.fc = nn.Linear(hidden_size, 1)
+        self.rnn = nn.GRU(input_dim, hidden_dim, batch_first=True)
+        self.dropout = nn.Dropout(dropout_prob)
+        self.fc = nn.Linear(hidden_dim, 1)
 
     def forward(self, x):
-        x = self.embedding(x.long())
-        x = self.proj(x)
-
-        # Process each sequence in the batch individually
-        batch_size = x.size(0)
-        outputs = []
-        for i in range(batch_size):
-            sequence = x[i].unsqueeze(0)
-            out, _ = self.rnn(sequence)
-            out = self.fc(out[:, -1, :])
-            outputs.append(out)
-
-        # Stack the outputs to get the final tensor
-        x = torch.stack(outputs, dim=0).squeeze()
+        x = x.view(x.shape[0], -1, self.rnn.input_size)  # Reshape the input tensor
+        x, _ = self.rnn(x)
+        x = self.dropout(x[:, -1, :])
+        x = self.fc(x)
         return x
 
 
-def rnn_layer(tparams, emb, options, mask=None):
-    hiddenDimSize = options['hiddenDimSize']
-    timesteps = emb.shape[0]
-    if emb.ndim == 3: n_samples = emb.shape[1]
-    else: n_samples = 1
-
-    def stepFn(stepMask, e, h):
-        h_new = T.tanh(T.dot(e, tparams['W_rnn']) + T.dot(h, tparams['U_rnn']) + tparams['b_rnn'])
-        h_new = stepMask[:, None] * h_new + (1. - stepMask)[:, None] * h
-        return h_new
-
-    results, updates = theano.scan(fn=stepFn, sequences=[mask, emb], outputs_info=T.alloc(numpy_floatX(0.0), n_samples, hiddenDimSize), name='rnn_layer', n_steps=timesteps)
-
-    return results[-1] 
-
-
-
-def train_RNN_SVM(
+def train_RNN(
     dataFile='data.txt',
     labelFile='label.txt',
-    embFile='emb.txt',
+    embFile='embeddings.plk',
     outFile='out.txt',
     inputDimSize=100,
-    embDimSize=100,
     hiddenDimSize=100,
     max_epochs=100,
     lr=0.001,
     batchSize=100,
-    use_dropout=True
+    dropout_prob=0.5,
+    L2_reg=1e-4
 ):
     options = locals().copy()
+    bestValidAuc = 0.
     
     print('Loading Embedded File')
-    embeddings = load_embeddings(embFile)
-    print("Embeddings shape:", np.array(embeddings).shape)
+    with open(embFile, 'rb') as f:
+        embeddings = pickle.load(f)
+    print('done!!')
 
-
-    
     print('Loading data ... ')
     trainSet, validSet, testSet = load_data(dataFile, labelFile)
-    n_batches = int(np.ceil(float(len(trainSet[0])) / float(batchSize)))
+    y_train_labels = np.array(trainSet[1], dtype=np.int64)
+    y_valid_labels = np.array(validSet[1], dtype=np.int64)
+    y_test_labels = np.array(testSet[1], dtype=np.int64)
     print('done!!')
-
-    print('Building the model ... ')
-    #params = init_params(options)
-    #tparams = init_tparams(params)
-    #Wemb = theano.shared(params['W_emb'], name='W_emb')
-    #use_noise, x, mask, y, rnn_output, cost = build_model(tparams, options, Wemb)
     
-    # Extract features from training, validation, and test sets
-    rnn = RNNModel(inputDimSize, hiddenDimSize, embeddings)
+    # Convert sequences to integer indices
+    train_indices = np.array([np.array(ast.literal_eval(seq), dtype=np.int64) for seq in trainSet[0]])
+    valid_indices = np.array([np.array(ast.literal_eval(seq), dtype=np.int64) for seq in validSet[0]])
+    test_indices = np.array([np.array(ast.literal_eval(seq), dtype=np.int64) for seq in testSet[0]])
 
-    # Train the RNN model
-    y_train_array = np.array(trainSet[1])
-    X_train_padded, _ = padMatrix(trainSet[0])
-    X_train_tensor = torch.tensor(X_train_padded, dtype=torch.float32).permute(1, 0, 2)
-    X_train_tensor = X_train_tensor.mean(dim=-1)
-    y_train_tensor = torch.tensor(y_train_array.astype(np.float32)).unsqueeze(1)
-    print('done!!')
+    # Get the embeddings for the training, validation, and test sets
+    X_train = padMatrix([embeddings[seq] for seq in train_indices])
+    X_valid = padMatrix([embeddings[seq] for seq in valid_indices])
+    X_test = padMatrix([embeddings[seq] for seq in test_indices])
 
-
+    rnn_model = RNNModel(inputDimSize, hiddenDimSize, dropout_prob)
     criterion = nn.BCEWithLogitsLoss()
-    optimizer = optim.Adam(rnn.parameters(), lr=lr)
+    optimizer = optim.Adam(rnn_model.parameters(), lr=lr)
+
+    def train_epoch():
+        rnn_model.train()
+        total_loss = 0
+        for i in range(0, len(trainSet[0]), batchSize):
+            X_batch_padded = X_train[i:i + batchSize]
+            X_batch_tensor = torch.tensor(X_batch_padded, dtype=torch.float32)
+            y_batch_tensor = torch.tensor(y_train_labels[i:i + batchSize], dtype=torch.float32)  # Add this line back
+
+            optimizer.zero_grad()
+            outputs = rnn_model(X_batch_tensor).squeeze()
+            loss = criterion(outputs, y_batch_tensor)
+            
+            l2_reg = torch.tensor(0., dtype=torch.float32)
+            for param in rnn_model.parameters():
+                l2_reg += torch.norm(param)**2
+            loss += L2_reg * l2_reg
+            
+            loss.backward()
+            optimizer.step()
+            total_loss += loss.item()
+        return total_loss / len(trainSet[0])
+
     for epoch in range(max_epochs):
-        optimizer.zero_grad()
-        outputs = rnn(X_train_tensor[:, :100])
-        loss = criterion(outputs.unsqueeze(-1), y_train_tensor)
-        loss.backward()
-        optimizer.step()
+        train_loss = train_epoch()
+        valid_outputs = rnn_model(torch.tensor(X_valid, dtype=torch.float32)).squeeze()
+        valid_auc = roc_auc_score(y_valid_labels, valid_outputs.detach().numpy()) 
+        if (valid_auc > bestValidAuc):
+            bestValidAuc = valid_auc
+            print('Best validation score: {:.4f}'.format(valid_auc))
+        print('Epoch {:3d}, Loss: {:.4f}, Validation AUC-ROC: {:.4f}'.format(epoch + 1, train_loss, valid_auc))
 
-    # Extract features from the RNN model
-    with torch.no_grad():
-        train_features = rnn(X_train_tensor).numpy()
+    test_scores = predict(rnn_model, X_test)
+    test_auc = roc_auc_score(y_test_labels, test_scores)
 
-    # Train SVM on extracted features
-
-    valid_auc = calculate_auc(svm, rnn, validSet)
-    
-    test_auc = calculate_auc(svm, rnn, testSet)
-
-    print('Validation AUC-ROC: {:.4f}'.format(valid_auc))
     print('Test AUC-ROC: {:.4f}'.format(test_auc))
-
-    with open(outFile, 'w') as f:
-        f.write('Validation AUC-ROC: {:.4f}\n'.format(valid_auc))
-        f.write('Test AUC-ROC: {:.4f}\n'.format(test_auc))
 
 if __name__ == '__main__':
     dataFile = sys.argv[1]
@@ -307,13 +243,13 @@ if __name__ == '__main__':
     embFile = sys.argv[3]
     outFile = sys.argv[4]
 
-    inputDimSize = 100 #The number of unique medical codes
-    embDimSize = 100
-    hiddenDimSize = 100 
+    inputDimSize = 1000 #The number of unique medical codes
+    hiddenDimSize = 1000 
     max_epochs = 100 #Maximum epochs to train
-    lr = 0.001 
-    batchSize = 10 #The size of the mini-batch
-    use_dropout = True 
+    lr = 0.01 
+    batchSize = 1000 #The size of the mini-batch
+    dropout_prob=0.7
+    L2_reg = 1e-4
     
 
-    train_RNN_SVM(dataFile=dataFile, labelFile=labelFile, embFile=embFile, outFile=outFile, inputDimSize=inputDimSize, embDimSize=embDimSize, hiddenDimSize=hiddenDimSize, max_epochs=max_epochs, lr=lr, batchSize=batchSize, use_dropout=use_dropout)
+    train_RNN(dataFile=dataFile, labelFile=labelFile, embFile=embFile, outFile=outFile, inputDimSize=inputDimSize, hiddenDimSize=hiddenDimSize, max_epochs=max_epochs, lr=lr, batchSize=batchSize, dropout_prob=dropout_prob,L2_reg=L2_reg)

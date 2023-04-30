@@ -191,7 +191,7 @@ def train_KNN(
 
     # Train KNN on the embeddings
     print('Training KNN...')
-    knn = KNeighborsClassifier(n_neighbors=5, weights='distance', metric='euclidean')
+    knn = KNeighborsClassifier(n_neighbors=10, weights='distance', metric='euclidean')
     knn.fit(X_train, y_train_labels)
     print('done!!')
 
@@ -214,11 +214,11 @@ if __name__ == '__main__':
     embFile = sys.argv[3]
     outFile = sys.argv[4]
 
-    inputDimSize = 100 #The number of unique medical codes
-    hiddenDimSize = 100 
+    inputDimSize = 1000 #The number of unique medical codes
+    hiddenDimSize = 1000 
     max_epochs = 100 #Maximum epochs to train
     lr = 0.01 
-    batchSize = 100 #The size of the mini-batch
+    batchSize = 1000 #The size of the mini-batch
     use_dropout = True 
     
 

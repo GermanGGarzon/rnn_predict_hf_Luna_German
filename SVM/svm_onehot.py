@@ -147,29 +147,14 @@ def padMatrix(seqs):
 
 
 
-# Define the PyTorch RNN model
-class RNNModel(nn.Module):
-    def __init__(self, input_dim, hidden_dim):
-        super(RNNModel, self).__init__()
-        self.rnn = nn.RNN(input_dim, hidden_dim, batch_first=True, nonlinearity='relu')
-        self.fc = nn.Linear(hidden_dim, 1)
-
-    def forward(self, x):
-        x, _ = self.rnn(x)
-        x = self.fc(x[:, -1, :])
-        return x
-
-
-def train_RNN_SVM(
+def train_SVM(
     dataFile='data.txt',
     labelFile='label.txt',
     outFile='out.txt',
     inputDimSize=100,
     hiddenDimSize=100,
     max_epochs=100,
-    lr=0.001,
-    batchSize=100,
-    use_dropout=True
+    batchSize=100
 ):
     options = locals().copy()
 
@@ -188,14 +173,20 @@ def train_RNN_SVM(
 
     # Train SVM on padded input sequences
     print('Training SVM...')
-    svm = SVC(kernel='linear', gamma=1000, degree=5, coef0=-0.5, C=0.001)
+    svm = SVC(kernel='linear', gamma=1000, degree=5, coef0=-0.5, C=0.001, probability=True)
     
-    svm.fit(X_train, y_train_labels)  # Pass padded input sequences and corresponding labels
+    svm.fit(X_train, y_train_labels)  
     print('done!!')
 
-    valid_auc = calculate_auc(svm, None, (validSet[0], y_valid_labels), use_rnn=False)
-    test_auc = calculate_auc(svm, None, (testSet[0], y_test_labels), use_rnn=False)
+    X_valid_padded, _ = padMatrix(validSet[0])
+    X_valid = np.reshape(X_valid_padded, (X_valid_padded.shape[1], -1))
+    y_valid_proba = svm.predict_proba(X_valid)
+    valid_auc = roc_auc_score(y_valid_labels, y_valid_proba[:, 1])
 
+    X_test_padded, _ = padMatrix(testSet[0])
+    X_test = np.reshape(X_test_padded, (X_test_padded.shape[1], -1))
+    y_test_proba = svm.predict_proba(X_test)
+    test_auc = roc_auc_score(y_test_labels, y_test_proba[:, 1])
 
     print('Validation AUC-ROC: {:.4f}'.format(valid_auc))
     print('Test AUC-ROC: {:.4f}'.format(test_auc))
@@ -209,12 +200,12 @@ if __name__ == '__main__':
     labelFile = sys.argv[2]
     outFile = sys.argv[3]
 
-    inputDimSize = 1000 #The number of unique medical codes
-    hiddenDimSize = 1000 
-    max_epochs = 100 #Maximum epochs to train
+    inputDimSize = 1000
+    hiddenDimSize = 100 
+    max_epochs = 100 
     lr = 0.001 
-    batchSize = 100 #The size of the mini-batch
+    batchSize = 1000 
     use_dropout = True 
     
 
-    train_RNN_SVM(dataFile=dataFile, labelFile=labelFile, outFile=outFile, inputDimSize=inputDimSize, hiddenDimSize=hiddenDimSize, max_epochs=max_epochs, lr=lr, batchSize=batchSize, use_dropout=use_dropout)
+    train_SVM(dataFile=dataFile, labelFile=labelFile, outFile=outFile, inputDimSize=inputDimSize, hiddenDimSize=hiddenDimSize, max_epochs=max_epochs, batchSize=batchSize)
