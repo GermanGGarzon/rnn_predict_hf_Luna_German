@@ -41,7 +41,6 @@ def init_params(options):
 
     params['W_emb'] = np.random.uniform(-0.01, 0.01, (inputDimSize, hiddenDimSize)).astype(config.floatX)
 
-    # Use Glorot initialization for W_rnn and U_rnn
     bound = np.sqrt(6. / (options['inputDimSize'] + options['hiddenDimSize']))
     params['W_rnn'] = np.random.uniform(-bound, bound, (options['inputDimSize'], options['hiddenDimSize']))
     bound = np.sqrt(6. / (options['hiddenDimSize'] + options['hiddenDimSize']))
@@ -101,14 +100,14 @@ def load_data(dataFile, labelFile, test_size=0.2, valid_size=0.2):
     sequences = np.array(pickle.load(open(dataFile, 'rb')))
     labels = np.array(pickle.load(open(labelFile, 'rb')))
 
-    # Shuffle the data and labels together
+
     data = np.column_stack((sequences, labels))
     np.random.shuffle(data)
 
     sequences_shuffled = data[:, 0]
     labels_shuffled = data[:, 1]
 
-    # Split the data into train, validation, and test sets
+  
     X_train, X_temp, y_train, y_temp = train_test_split(sequences_shuffled, labels_shuffled, test_size=test_size + valid_size)
     X_valid, X_test, y_valid, y_test = train_test_split(X_temp, y_temp, test_size=test_size / (test_size + valid_size))
 
@@ -250,11 +249,11 @@ if __name__ == '__main__':
     embFile = sys.argv[3]
     outFile = sys.argv[4]
 
-    inputDimSize = 1000 #The number of unique medical codes
+    inputDimSize = 1000 
     hiddenDimSize = 1000 
-    max_epochs = 100 #Maximum epochs to train
+    max_epochs = 100 
     lr = 0.01 
-    batchSize = 100 #The size of the mini-batch
+    batchSize = 100 
     dropout_prob=0.7
     L2_reg = 1e-4
     
