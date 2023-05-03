@@ -1,4 +1,4 @@
-# # Heart Failure Prediction using RNN - Reproduction
+# Heart Failure Prediction using RNN - Reproduction
 
 # Requirement
 For the reproduction effort, we reproduced the code for GRU and developed our own implementation of KNN and SVM. All of these require the use of an Anaconda environment with Python 3.5, numpy, scikit-learn, theano, and torchvision.
