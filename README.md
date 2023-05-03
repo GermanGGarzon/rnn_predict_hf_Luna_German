@@ -1,4 +1,30 @@
-# Heart Failure Prediction using RNN
+# # Heart Failure Prediction using RNN - Reproduction
+
+# Requirement
+For the reproduction effort, we reproduced the code for GRU and developed our own implementation of KNN and SVM. All of these require the use of an Anaconda environment with Python 3.5, numpy, scikit-learn, theano, and torchvision.
+
+# Pickled Files
+We have a set of pickled files that we run with our implementation. These pickled files are created with a python script we developed. The scripts need to be opened and modified to indicate the input and output files. The scripts are in Data from MediSyn/ICU-Synthetic/ICU-Synthetic/.
+
+In order to create the embiddings files we generated them with a python script we developed in the Create Embeddings folder. This python file also needs to be opened and modified to specify the embeddings range, size of the embeddings and output file name. The files have already been generated and are named embeddings.pkl
+
+# How to execute
+The GRU, SVM, and KNN folders contains the required python files to run GRU, SVM, and KNN respectively
+
+To Run svm_onehot.py and svm_emb.py use:
+- python svm_onehot.py new_seqs.pkl new_labels.pkl outfile
+- python svm_emb.py new_seqs.pkl new_labels.pkl embeddings.pkl outfile
+
+To Run knn_onehot.py and knn_emb.py use:
+- python knn_onehot.py new_seqs.pkl new_labels.pkl outfile
+- python knn_emb.py new_seqs.pkl new_labels.pkl embeddings.pkl outfile
+
+To Run gru_onehot.py and gru_emb.py use:
+- python gru_onehot.py new_seqs.pkl new_labels.pkl outfile
+- python gru_emb.py new_seqs.pkl new_labels.pkl embeddings.pkl outfile
+
+
+# Heart Failure Prediction using RNN - Original
 This is a simple RNN (implemented with Gated Recurrent Units) for predicting a HF diagnosis given patient records.
 There are four different versions.
 
@@ -15,7 +41,7 @@ The data are synthetic and make no sense at all. It is intended only for testing
 4. emb.pkl: This is a randomly generated code embedding of size 100 X 100
 
 # Requirement
-Python and Theano are required to run the scripts
+In order to run the existing code from the authors (GRU), only an Anaconda environment with Python 2.7, numpy, scikit-learn, and theano are required.
 
 # How to Execute
 1. python gru_onehot.py sequences.pkl labels.pkl <output>
