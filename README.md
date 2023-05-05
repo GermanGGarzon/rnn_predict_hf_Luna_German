@@ -6,9 +6,10 @@ For the reproduction effort, we reproduced the code for GRU and developed our ow
 Open a command prompt and enter the following commands:
 - conda create --name py3 python=3.5
 - activate py3
-- cpip install numpy scikit-learn
-- pip install theano
-- conda install torchvision -c pytorch
+- conda install numpy 
+- conda install scikit-learn
+- conda install theano
+- conda install -c pytorch torchvision
  (you may be required to have an admin command prompt to install these packages)
  
 - Once all the packages have been installed, move on to the section labeled "How to execute" below
