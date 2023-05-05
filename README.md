@@ -3,13 +3,20 @@
 # Requirement
 For the reproduction effort, we reproduced the code for GRU and developed our own implementation of KNN and SVM. All of these require the use of an Anaconda environment with Python 3.5, numpy, scikit-learn, theano, and torchvision.
 
+Open a command prompt and enter the following commands:
+- conda create --name py3 python=3.5
+- activate py3
+- conda install numpy scikit-learn theano torchvision
+- Once all the packages have been installed, move on to the section labeled "How to execute" below
+
+
 # Pickled Files
 We have a set of pickled files that we run with our implementation. These pickled files are created with a python script we developed. The scripts need to be opened and modified to indicate the input and output files. The scripts are in Data from MediSyn/ICU-Synthetic/ICU-Synthetic/.
 
 In order to create the embiddings files we generated them with a python script we developed in the Create Embeddings folder. This python file also needs to be opened and modified to specify the embeddings range, size of the embeddings and output file name. The files have already been generated and are named embeddings.pkl
 
 # How to execute
-The GRU, SVM, and KNN folders contains the required python files to run GRU, SVM, and KNN respectively
+The GRU, SVM, and KNN folders contains the required python files to run GRU, SVM, and KNN respectively. cd into the directory of your choosing.
 
 To Run svm_onehot.py and svm_emb.py use:
 - python svm_onehot.py new_seqs.pkl new_labels.pkl outfile
@@ -26,7 +33,8 @@ To Run gru_onehot.py and gru_emb.py use:
 
 # Heart Failure Prediction using RNN - Original
 This is a simple RNN (implemented with Gated Recurrent Units) for predicting a HF diagnosis given patient records.
-There are four different versions.
+There are four different versions. The code provided by the authors of the original paper can be found in the main directory of the repo: /rnn_predict_hf_Luna_German/
+ 
 
 1. gru_onehot.py: This uses one-hot encoding for the medical code embedding
 2. gru_onehot_time.py: This uses one-hot encoding for the medical code embedding. This uses time information in addition to the code sequences
