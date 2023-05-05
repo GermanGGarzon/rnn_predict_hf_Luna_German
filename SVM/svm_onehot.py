@@ -12,6 +12,7 @@ from sklearn.metrics import accuracy_score
 import time
 from sklearn.model_selection import train_test_split
 from sklearn.model_selection import StratifiedKFold
+import ast
 
 import torch
 import torch.nn as nn
@@ -122,28 +123,28 @@ def calculate_auc(svm_model, rnn_model, dataset, use_rnn=True):
 
 max_sequence_length = 100
 
-def padMatrix(seqs):
-    lengths = [len(s) for s in seqs]
+
+def padMatrix(seqs, max_len):
+    lengths = [len(ast.literal_eval(s)) for s in seqs]
     n_samples = len(seqs)
-    max_len = np.min([np.max(lengths), max_sequence_length])
 
-    x = np.zeros((max_len, n_samples, inputDimSize), dtype='float32')
-    x_mask = np.zeros((max_len, n_samples), dtype='float32')
+    x = np.zeros((n_samples, max_len * inputDimSize), dtype='float32')
 
-    for idx, s in enumerate(seqs):
+    for idx, seq_str in enumerate(seqs):
+        seq = ast.literal_eval(seq_str)
         seq_length = lengths[idx]
-        one_hot_seq = np.zeros((max_len, inputDimSize), dtype='float32')
-        for i, c in enumerate(s[:max_len]):
-            if isinstance(c, str) and len(c) == 1:
-                one_hot_seq[i, ord(c)] = 1
-            elif isinstance(c, (int, np.int64)):
-                one_hot_seq[i, c] = 1
-            else:
-                raise ValueError("Unsupported input value in sequences")
-        x[:, idx, :] = one_hot_seq
-        x_mask[:min(seq_length, max_len), idx] = 1.
 
-    return x, x_mask
+        one_hot_seq = np.zeros((len(seq), inputDimSize))
+        for i, char in enumerate(seq):
+            one_hot_seq[i, int(char)] = 1
+
+        one_hot_seq = one_hot_seq[:max_len]
+        
+        x[idx, :min(seq_length, max_len) * inputDimSize] = one_hot_seq.flatten()[:min(seq_length, max_len) * inputDimSize]
+
+    return x
+
+
 
 
 
@@ -151,9 +152,6 @@ def train_SVM(
     dataFile='data.txt',
     labelFile='label.txt',
     outFile='out.txt',
-    inputDimSize=100,
-    hiddenDimSize=100,
-    max_epochs=100,
     batchSize=100
 ):
     options = locals().copy()
@@ -165,10 +163,12 @@ def train_SVM(
     y_test_labels = np.array(testSet[1], dtype=np.int64)
     n_batches = int(np.ceil(float(len(trainSet[0])) / float(batchSize)))
     print('done!!')
-
+    
+    max_len_train = np.min([np.max([len(s) for s in trainSet[0]]), max_sequence_length])
     # Pad input sequences for training, validation, and test sets
-    X_train_padded, _ = padMatrix(trainSet[0])
-    X_train = np.reshape(X_train_padded, (X_train_padded.shape[1], -1))
+    X_train_padded = padMatrix(trainSet[0], max_len_train)
+    X_train = X_train_padded
+
     
 
     # Train SVM on padded input sequences
@@ -178,13 +178,13 @@ def train_SVM(
     svm.fit(X_train, y_train_labels)  
     print('done!!')
 
-    X_valid_padded, _ = padMatrix(validSet[0])
-    X_valid = np.reshape(X_valid_padded, (X_valid_padded.shape[1], -1))
+    X_valid_padded = padMatrix(validSet[0], max_len_train)
+    X_valid = X_valid_padded
     y_valid_proba = svm.predict_proba(X_valid)
     valid_auc = roc_auc_score(y_valid_labels, y_valid_proba[:, 1])
 
-    X_test_padded, _ = padMatrix(testSet[0])
-    X_test = np.reshape(X_test_padded, (X_test_padded.shape[1], -1))
+    X_test_padded = padMatrix(testSet[0], max_len_train)
+    X_test = X_test_padded
     y_test_proba = svm.predict_proba(X_test)
     test_auc = roc_auc_score(y_test_labels, y_test_proba[:, 1])
 
@@ -208,4 +208,4 @@ if __name__ == '__main__':
     use_dropout = True 
     
 
-    train_SVM(dataFile=dataFile, labelFile=labelFile, outFile=outFile, inputDimSize=inputDimSize, hiddenDimSize=hiddenDimSize, max_epochs=max_epochs, batchSize=batchSize)
+    train_SVM(dataFile=dataFile, labelFile=labelFile, outFile=outFile, batchSize=batchSize)

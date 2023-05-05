@@ -9,6 +9,7 @@ from collections import OrderedDict
 from sklearn.metrics import roc_auc_score
 from sklearn.svm import SVC
 from sklearn.metrics import accuracy_score
+import ast
 import time
 from sklearn.model_selection import train_test_split
 from sklearn.model_selection import StratifiedKFold
@@ -126,38 +127,34 @@ def calculate_auc(knn_model, rnn_model, dataset, use_rnn=True):
 
 max_sequence_length = 100
 
-def padMatrix(seqs):
-    lengths = [len(s) for s in seqs]
+def padMatrix(seqs, max_len):
+    lengths = [len(ast.literal_eval(s)) for s in seqs]
     n_samples = len(seqs)
-    max_len = np.min([np.max(lengths), max_sequence_length])
 
-    x = np.zeros((max_len, n_samples, inputDimSize), dtype='float32')
-    x_mask = np.zeros((max_len, n_samples), dtype='float32')
+    x = np.zeros((n_samples, max_len * inputDimSize), dtype='float32')
 
-    for idx, s in enumerate(seqs):
+    for idx, seq_str in enumerate(seqs):
+        seq = ast.literal_eval(seq_str)
         seq_length = lengths[idx]
-        one_hot_seq = np.zeros((max_len, inputDimSize), dtype='float32')
-        for i, c in enumerate(s[:max_len]):
-            if isinstance(c, str) and len(c) == 1:
-                one_hot_seq[i, ord(c)] = 1
-            elif isinstance(c, (int, np.int64)):
-                one_hot_seq[i, c] = 1
-            else:
-                raise ValueError("Unsupported input value in sequences")
-        x[:, idx, :] = one_hot_seq
-        x_mask[:min(seq_length, max_len), idx] = 1.
 
-    return x, x_mask
+        one_hot_seq = np.zeros((len(seq), inputDimSize))
+        for i, char in enumerate(seq):
+            one_hot_seq[i, int(char)] = 1
+
+        one_hot_seq = one_hot_seq[:max_len]
+        
+        x[idx, :min(seq_length, max_len) * inputDimSize] = one_hot_seq.flatten()[:min(seq_length, max_len) * inputDimSize]
+
+    return x
+
 
 
 def train_KNN(
     dataFile='data.txt',
     labelFile='label.txt',
     outFile='out.txt',
-    inputDimSize=100,
-    hiddenDimSize=100,
-    max_epochs=100,
-    lr=0.001,
+    inputDimSize=1000,
+    n_neighbors=100,
     batchSize=100,
     use_dropout=True
 ):
@@ -172,20 +169,29 @@ def train_KNN(
     n_batches = int(np.ceil(float(len(trainSet[0])) / float(batchSize)))
     print('done!!')
 
+    max_len_train = np.min([np.max([len(s) for s in trainSet[0]]), max_sequence_length])
     # Pad input sequences for training, validation, and test sets
-    X_train_padded, _ = padMatrix(trainSet[0])
-    X_train = np.reshape(X_train_padded, (X_train_padded.shape[1], -1))
+    X_train_padded = padMatrix(trainSet[0], max_len_train)
+    X_train = X_train_padded
     
 
     # Train KNN on padded input sequences
     print('Training KNN...')
-    knn = KNeighborsClassifier(n_neighbors=100, weights='distance', metric='euclidean')
+    knn = KNeighborsClassifier(n_neighbors=n_neighbors, weights='distance', metric='euclidean')
     knn.fit(X_train, y_train_labels) 
     print('done!!')
 
-    valid_auc = calculate_auc(knn, None, (validSet[0], y_valid_labels), use_rnn=False)
+    X_valid_padded = padMatrix(validSet[0], max_len_train)
+    X_valid = X_valid_padded
+    y_valid_proba = knn.predict_proba(X_valid)
+    valid_auc = roc_auc_score(y_valid_labels, y_valid_proba[:, 1])
+
+    X_test_padded = padMatrix(testSet[0], max_len_train)
+    X_test = X_test_padded
+    y_test_proba = knn.predict_proba(X_test)
+    test_auc = roc_auc_score(y_test_labels, y_test_proba[:, 1])
+
     print('Validation AUC-ROC: {:.4f}'.format(valid_auc))
-    test_auc = calculate_auc(knn, None, (testSet[0], y_test_labels), use_rnn=False)
     print('Test AUC-ROC: {:.4f}'.format(test_auc))
     
     with open(outFile, 'w') as f:
@@ -197,12 +203,10 @@ if __name__ == '__main__':
     labelFile = sys.argv[2]
     outFile = sys.argv[3]
 
-    inputDimSize = 1000 #The number of unique medical codes
-    hiddenDimSize = 1000 
-    max_epochs = 100 #Maximum epochs to train
-    lr = 0.01 
-    batchSize = 1000 #The size of the mini-batch
+    batchSize = 100 #The size of the mini-batch
+    n_neighbors = 10
     use_dropout = True 
+    inputDimSize = 1000
     
 
-    train_KNN(dataFile=dataFile, labelFile=labelFile, outFile=outFile, inputDimSize=inputDimSize, hiddenDimSize=hiddenDimSize, max_epochs=max_epochs, lr=lr, batchSize=batchSize, use_dropout=use_dropout)
+    train_KNN(dataFile=dataFile, labelFile=labelFile, outFile=outFile, inputDimSize=inputDimSize, n_neighbors=n_neighbors, batchSize=batchSize, use_dropout=use_dropout)

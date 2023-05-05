@@ -11,12 +11,14 @@ from sklearn.svm import SVC
 from sklearn.metrics import accuracy_score
 import time
 from sklearn.model_selection import train_test_split
+import ast
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
 
 theano.config.cxx = ""
+
 
 SEED = int(time.time())
 
@@ -132,28 +134,27 @@ def adadelta(tparams, grads, x, mask, y, cost):
 
 max_sequence_length = 100
 
-def padMatrix(seqs):
-    lengths = [len(s) for s in seqs]
+def padMatrix(seqs, max_len):
+    lengths = [len(ast.literal_eval(s)) for s in seqs]
     n_samples = len(seqs)
-    max_len = np.min([np.max(lengths), max_sequence_length])
 
-    x = np.zeros((max_len, n_samples, inputDimSize), dtype='float32')
-    x_mask = np.zeros((max_len, n_samples), dtype='float32')
+    x = np.zeros((n_samples, max_len, inputDimSize), dtype='float32')
 
-    for idx, s in enumerate(seqs):
+
+    for idx, seq_str in enumerate(seqs):
+        seq = ast.literal_eval(seq_str)
         seq_length = lengths[idx]
-        one_hot_seq = np.zeros((max_len, inputDimSize), dtype='float32')
-        for i, c in enumerate(s[:max_len]):
-            if isinstance(c, str) and len(c) == 1:
-                one_hot_seq[i, ord(c)] = 1
-            elif isinstance(c, (int, np.int64)):
-                one_hot_seq[i, c] = 1
-            else:
-                raise ValueError("Unsupported input value in sequences")
-        x[:, idx, :] = one_hot_seq
-        x_mask[:min(seq_length, max_len), idx] = 1.
 
-    return x, x_mask
+        one_hot_seq = np.zeros((len(seq), inputDimSize))
+        for i, char in enumerate(seq):
+            one_hot_seq[i, int(char)] = 1
+
+        one_hot_seq = one_hot_seq[:max_len]
+        
+        x[idx, :min(seq_length, max_len), :] = one_hot_seq[:min(seq_length, max_len), :]
+
+
+    return x
 
 
 
@@ -169,6 +170,7 @@ class RNNModel(nn.Module):
         x = self.dropout(x[:, -1, :])
         x = self.fc(x)
         return x
+
 
 
 def train_RNN(
@@ -193,6 +195,8 @@ def train_RNN(
     y_valid_labels = np.array(validSet[1], dtype=np.float32)
     y_test_labels = np.array(testSet[1], dtype=np.float32)
     print('done!!')
+    
+    max_len_train = np.min([np.max([len(s) for s in trainSet[0]]), max_sequence_length])
 
     rnn_model = RNNModel(inputDimSize, hiddenDimSize, dropout_prob)
     criterion = nn.BCEWithLogitsLoss()
@@ -202,8 +206,8 @@ def train_RNN(
         rnn_model.train()
         total_loss = 0
         for i in range(0, len(trainSet[0]), batchSize):
-            X_batch_padded, X_batch_mask = padMatrix(trainSet[0][i:i + batchSize])
-            X_batch_tensor = torch.tensor(X_batch_padded, dtype=torch.float32).permute(1, 0, 2)
+            X_batch_padded = padMatrix(trainSet[0][i:i + batchSize],max_len_train)
+            X_batch_tensor = torch.tensor(X_batch_padded, dtype=torch.float32)
             y_batch_tensor = torch.tensor(y_train_labels[i:i + batchSize], dtype=torch.float32)
 
             optimizer.zero_grad()
@@ -222,8 +226,8 @@ def train_RNN(
 
     def calculate_auc(dataset):
         rnn_model.eval()
-        X_data_padded, _ = padMatrix(dataset[0])
-        X_data_tensor = torch.tensor(X_data_padded, dtype=torch.float32).permute(1, 0, 2)
+        X_data_padded = padMatrix(dataset[0],max_len_train)
+        X_data_tensor = torch.tensor(X_data_padded, dtype=torch.float32)
         with torch.no_grad():
             outputs = rnn_model(X_data_tensor).squeeze()
         y_pred = torch.sigmoid(outputs).numpy()
@@ -254,10 +258,11 @@ if __name__ == '__main__':
     outFile = sys.argv[3]
 
     inputDimSize = 1000 
-    hiddenDimSize = 1000 
-    max_epochs = 100 
-    batchSize = 100 
+    hiddenDimSize = 100 
+    max_epochs = 50 
+    batchSize = 10 
     dropout_prob=0.7
+    lr = 0.01 
     L2_reg = 1e-4
     
 
