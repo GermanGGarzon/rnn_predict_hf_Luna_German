@@ -23,17 +23,14 @@ In order to create the embiddings files we generated them with a python script w
 # How to execute
 The GRU, SVM, and KNN folders contains the required python files to run GRU, SVM, and KNN respectively. cd into the directory of your choosing.
 
-To Run svm_onehot.py and svm_emb.py use:
+To Run svm_onehot.py use:
 - python svm_onehot.py new_seqs.pkl new_labels.pkl outfile
-- python svm_emb.py new_seqs.pkl new_labels.pkl embeddings.pkl outfile
 
-To Run knn_onehot.py and knn_emb.py use:
+To Run knn_onehot.py use:
 - python knn_onehot.py new_seqs.pkl new_labels.pkl outfile
-- python knn_emb.py new_seqs.pkl new_labels.pkl embeddings.pkl outfile
 
-To Run gru_onehot.py and gru_emb.py use:
+To Run gru_onehot.py use:
 - python gru_onehot.py new_seqs.pkl new_labels.pkl outfile
-- python gru_emb.py new_seqs.pkl new_labels.pkl embeddings.pkl outfile
 
 
 # Heart Failure Prediction using RNN - Original
