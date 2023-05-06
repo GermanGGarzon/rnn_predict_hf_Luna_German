@@ -159,18 +159,17 @@ def padMatrix(seqs, max_len):
 
 
 class RNNModel(nn.Module):
-    def __init__(self, input_dim, hidden_dim, dropout_prob=0.5):
+    def __init__(self, input_dim, hidden_dim, num_layers=2, dropout_prob=0.5, bidirectional=True):
         super(RNNModel, self).__init__()
-        self.rnn = nn.GRU(input_dim, hidden_dim, batch_first=True)
+        self.rnn = nn.GRU(input_dim, hidden_dim, num_layers=num_layers, batch_first=True, bidirectional=bidirectional)
         self.dropout = nn.Dropout(dropout_prob)
-        self.fc = nn.Linear(hidden_dim, 1)
+        self.fc = nn.Linear(hidden_dim * 2 if bidirectional else hidden_dim, 1)
 
     def forward(self, x):
         x, _ = self.rnn(x)
         x = self.dropout(x[:, -1, :])
         x = self.fc(x)
         return x
-
 
 
 def train_RNN(
@@ -183,7 +182,9 @@ def train_RNN(
     lr=0.001,
     batchSize=100,
     dropout_prob=0.5,
-    L2_reg=1e-4
+    L2_reg=1e-4,
+    num_layers=2,  
+    bidirectional=True
 ):
     options = locals().copy()
     bestValidAuc = 0.
@@ -198,9 +199,12 @@ def train_RNN(
     
     max_len_train = np.min([np.max([len(s) for s in trainSet[0]]), max_sequence_length])
 
-    rnn_model = RNNModel(inputDimSize, hiddenDimSize, dropout_prob)
+    rnn_model = RNNModel(inputDimSize, hiddenDimSize, num_layers=num_layers, dropout_prob=dropout_prob, bidirectional=bidirectional)
+    
     criterion = nn.BCEWithLogitsLoss()
     optimizer = optim.Adam(rnn_model.parameters(), lr=lr)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=5, verbose=True)
+
 
     def train_epoch():
         rnn_model.train()
@@ -233,24 +237,43 @@ def train_RNN(
         y_pred = torch.sigmoid(outputs).numpy()
         return roc_auc_score(dataset[1], y_pred)
 
+
+
+    # Add early stopping
+    patience = 15
+    epochs_no_improve = 0
+    early_stopping = False
+
     for epoch in range(max_epochs):
         train_loss = train_epoch()
         valid_auc = calculate_auc(validSet)
+
+        # Update learning rate
+        scheduler.step(valid_auc)
+
         if (valid_auc > bestValidAuc):
             bestValidAuc = valid_auc
-            print('Best validation score: {:.4f}'.format(valid_auc))
+            epochs_no_improve = 0
+        else:
+            epochs_no_improve += 1
+            if epochs_no_improve == patience:
+                early_stopping = True
+
         print('Epoch {:3d}, Loss: {:.4f}, Validation AUC-ROC: {:.4f}'.format(epoch + 1, train_loss, valid_auc))
 
         test_auc = calculate_auc(testSet)
         if (test_auc > bestTestAuc):
             bestTestAuc = test_auc
-            print('Best Test score: {:.4f}'.format(test_auc))
 
         print('Test AUC-ROC: {:.4f}'.format(test_auc))
-        print('\n')
 
-    print('Best Validation score: {:.4f}'.format(bestValidAuc))
-    print('Best Test score: {:.4f}'.format(bestTestAuc))
+        if early_stopping:
+            print('Early stopping triggered')
+            break
+
+        print('Best Validation score: {:.4f}'.format(bestValidAuc))
+        print('Best Test score: {:.4f}'.format(bestTestAuc))
+        print('\n')
 
 if __name__ == '__main__':
     dataFile = sys.argv[1]

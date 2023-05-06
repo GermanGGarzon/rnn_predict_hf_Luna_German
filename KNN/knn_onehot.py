@@ -75,14 +75,12 @@ def load_data(dataFile, labelFile, test_size=0.2, valid_size=0.2):
     sequences = np.array(pickle.load(open(dataFile, 'rb')))
     labels = np.array(pickle.load(open(labelFile, 'rb')))
 
-    # Shuffle the data and labels together
     data = np.column_stack((sequences, labels))
     np.random.shuffle(data)
 
     sequences_shuffled = data[:, 0]
     labels_shuffled = data[:, 1]
 
-    # Split the data into train, validation, and test sets
     X_train, X_temp, y_train, y_temp = train_test_split(sequences_shuffled, labels_shuffled, test_size=test_size + valid_size)
     X_valid, X_test, y_valid, y_test = train_test_split(X_temp, y_temp, test_size=test_size / (test_size + valid_size))
 
@@ -170,12 +168,10 @@ def train_KNN(
     print('done!!')
 
     max_len_train = np.min([np.max([len(s) for s in trainSet[0]]), max_sequence_length])
-    # Pad input sequences for training, validation, and test sets
     X_train_padded = padMatrix(trainSet[0], max_len_train)
     X_train = X_train_padded
     
 
-    # Train KNN on padded input sequences
     print('Training KNN...')
     knn = KNeighborsClassifier(n_neighbors=n_neighbors, weights='distance', metric='euclidean')
     knn.fit(X_train, y_train_labels) 
@@ -203,7 +199,7 @@ if __name__ == '__main__':
     labelFile = sys.argv[2]
     outFile = sys.argv[3]
 
-    batchSize = 100 #The size of the mini-batch
+    batchSize = 100 
     n_neighbors = 10
     use_dropout = True 
     inputDimSize = 1000

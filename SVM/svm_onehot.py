@@ -73,14 +73,12 @@ def load_data(dataFile, labelFile, test_size=0.2, valid_size=0.2):
     sequences = np.array(pickle.load(open(dataFile, 'rb')))
     labels = np.array(pickle.load(open(labelFile, 'rb')))
 
-    # Shuffle the data and labels together
     data = np.column_stack((sequences, labels))
     np.random.shuffle(data)
 
     sequences_shuffled = data[:, 0]
     labels_shuffled = data[:, 1]
 
-    # Split the data into train, validation, and test sets
     X_train, X_temp, y_train, y_temp = train_test_split(sequences_shuffled, labels_shuffled, test_size=test_size + valid_size)
     X_valid, X_test, y_valid, y_test = train_test_split(X_temp, y_temp, test_size=test_size / (test_size + valid_size))
 
@@ -165,15 +163,12 @@ def train_SVM(
     print('done!!')
     
     max_len_train = np.min([np.max([len(s) for s in trainSet[0]]), max_sequence_length])
-    # Pad input sequences for training, validation, and test sets
     X_train_padded = padMatrix(trainSet[0], max_len_train)
     X_train = X_train_padded
 
-    
 
-    # Train SVM on padded input sequences
     print('Training SVM...')
-    svm = SVC(kernel='linear', gamma=1000, degree=5, coef0=-0.5, C=0.001, probability=True)
+    svm = SVC(kernel='linear', gamma=1000, degree=10, coef0=-0.1, C=0.001, probability=True)
     
     svm.fit(X_train, y_train_labels)  
     print('done!!')
