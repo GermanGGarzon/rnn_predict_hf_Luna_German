@@ -32,6 +32,9 @@ To Run knn_onehot.py use:
 To Run gru_onehot.py use:
 - python gru_onehot.py new_seqs.pkl new_labels.pkl outfile
 
+*Note: The gru_onehot.py that is in the root directory of this repository is the one that was provided by the authors of the original paper (Paper ID: 12).
+The GRU implementation that we developed is in rnn_predict_hf_Luna_German/GRU/
+
 
 # Heart Failure Prediction using RNN - Original
 This is a simple RNN (implemented with Gated Recurrent Units) for predicting a HF diagnosis given patient records.
